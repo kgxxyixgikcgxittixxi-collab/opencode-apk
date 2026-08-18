@@ -29,18 +29,34 @@ jobs:
       - name: Build APK
         run: ./gradlew assembleRelease --no-daemon
 
+      - name: Sign APK
+        run: |
+          export PATH="$ANDROID_HOME/build-tools/$($ANDROID_HOME/build-tools/*/apksigner --version 2>/dev/null >/dev/null; ls $ANDROID_HOME/build-tools | sort -V | tail -1):$PATH"
+          BT_DIR=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
+          keytool -genkeypair -v -keystore /tmp/release.keystore \
+            -alias opencode -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass opencode2026 -keypass opencode2026 \
+            -dname "CN=OpenCode, OU=App, O=OpenCode, L=HN, ST=VN, C=VN"
+          $BT_DIR/zipalign -f 4 app/build/outputs/apk/release/app-release-unsigned.apk /tmp/app-aligned.apk
+          $BT_DIR/apksigner sign --ks /tmp/release.keystore \
+            --ks-key-alias opencode --ks-pass pass:opencode2026 \
+            --out app/build/outputs/apk/release/opencode.apk /tmp/app-aligned.apk
+          echo "SIGNED OK"
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: opencode-apk
-          path: app/build/outputs/apk/release/app-release-unsigned.apk
+          path: app/build/outputs/apk/release/opencode.apk
 
       - name: Create Release
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.0
-          files: app/build/outputs/apk/release/app-release-unsigned.apk
+          files: app/build/outputs/apk/release/opencode.apk
           body: |
             OpenCode APK - WebView wrapper
             URL: https://opencode-proxy.idkyoohdtsu.workers.dev
+            user: opencode
+            password: opencode2026
